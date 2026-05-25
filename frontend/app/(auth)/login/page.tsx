@@ -180,8 +180,17 @@ export default function LoginPage() {
       
       // Dispatch redirect to GitHub OAuth portal.
       window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`;
-    } else {
-      toast.info("Google OAuth is not fully configured in this phase.");
+    } else if (provider === 'google') {
+      const clientId = env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      const redirectUri = `${env.NEXT_PUBLIC_REDIRECT_URI}/google`;
+      
+      if (!clientId) {
+        toast.error("Google Client ID is not configured in the environment.");
+        return;
+      }
+      
+      // Dispatch redirect to Google OAuth portal.
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile&access_type=offline&prompt=consent`;
     }
   };
 

@@ -21,6 +21,7 @@ const envSchema = z.object({
     message: "NEXT_PUBLIC_API_URL must be a valid URL address (e.g. http://localhost:8000/api)"
   }),
   NEXT_PUBLIC_GITHUB_CLIENT_ID: z.string().optional().default(""),
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().optional().default(""),
   NEXT_PUBLIC_REDIRECT_URI: z.string().optional().default("http://localhost:3000/callback"),
 });
 
@@ -30,6 +31,7 @@ const envSchema = z.object({
 const processEnv = {
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   NEXT_PUBLIC_GITHUB_CLIENT_ID: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID,
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
   NEXT_PUBLIC_REDIRECT_URI: process.env.NEXT_PUBLIC_REDIRECT_URI,
 };
 
