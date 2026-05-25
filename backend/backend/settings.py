@@ -176,3 +176,15 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'backend.exception_handler.custom_exception_handler',
 }
 
+
+# ==============================================================================
+# SOCIAL AUTHENTICATION CREDENTIALS (OAuth Providers keys mapping)
+# ==============================================================================
+SOCIAL_AUTH = {
+    'github': {
+        # We load these secure credentials dynamically from our environment files.
+        'client_id': env('GITHUB_CLIENT_ID', default=''),
+        'client_secret': env('GITHUB_CLIENT_SECRET', default=''),
+    }
+}
+
