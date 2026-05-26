@@ -194,6 +194,21 @@ REST_FRAMEWORK = {
     }
 }
 
+from datetime import timedelta
+
+# ==============================================================================
+# SIMPLE JWT CONFIGURATION (Session Tokens Lifespan)
+# ==============================================================================
+SIMPLE_JWT = {
+    # Set access token lifespan to 1 day for a seamless local development and testing flow
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    # Set refresh token lifespan to 7 days
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
+}
+
 
 # ==============================================================================
 # SOCIAL AUTHENTICATION CREDENTIALS (OAuth Providers keys mapping)

@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import DashboardWrapper from '@/components/dashboard/DashboardWrapper';
 import { 
   Settings, User, Shield, Trash2, 
-  Bell, Globe, Mail, Lock, Camera, AlertTriangle 
+  Bell, Globe, Mail, Lock, Camera, AlertTriangle,
+  Check, X, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 // Import our secure profile server actions to fetch and update details
-import { getUserProfileAction, updateUserProfileAction } from '@/app/actions/auth';
+import { getUserProfileAction, updateUserProfileAction, getCloudinarySignatureAction } from '@/app/actions/auth';
 
 type Tab = 'general' | 'profile' | 'password' | 'delete';
 
@@ -251,8 +252,20 @@ function ProfileSettingsTab({ profile, onRefresh }: ProfileSettingsTabProps) {
     fullName: profile.full_name || '',
     bio: profile.bio || '',
   });
-  // State to manage loading spinners during submit patches
+  // State to manage loading spinners during profile details submit patches
   const [isSaving, setIsSaving] = useState(false);
+
+  // ==============================================================================
+  // AVATAR FILE UPLOAD STATES & HANDLERS
+  // ==============================================================================
+  // State to hold the chosen raw File object from the user's computer
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  // State to hold the temporary local browser URL of the selected image for instant previewing
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  // State to manage media upload spinners and overlay indicators
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  // Reference to hook into the hidden native file input element
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync state if profile prop changes on updates
   useEffect(() => {
@@ -261,6 +274,110 @@ function ProfileSettingsTab({ profile, onRefresh }: ProfileSettingsTabProps) {
       bio: profile.bio || '',
     });
   }, [profile]);
+
+  // Handle local image file selections
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // 1. Boundary filter: Check if the selected file is indeed a standard image format
+      if (!file.type.startsWith('image/')) {
+        toast.error("Please select a valid image file.");
+        return;
+      }
+      // 2. Boundary filter: Guarantee the image is under 5MB to preserve CDN space
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size must be under 5MB.");
+        return;
+      }
+      setAvatarFile(file);
+      // 3. Create standard object URL to preview the selected file immediately in the client without network cost!
+      const previewUrl = URL.createObjectURL(file);
+      setAvatarPreview(previewUrl);
+    }
+  };
+
+  // Revoke object URL on component unmount to prevent browser memory leaks
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
+
+  // Cancel the selected avatar photo and revert to original state
+  const handleCancelAvatar = () => {
+    setAvatarFile(null);
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(null);
+    }
+    // Clear out the native input value so selecting the exact same image triggers file change listeners again!
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Upload the selected local image to Cloudinary and synchronize with our Django database
+  const handleUploadAvatar = async () => {
+    if (!avatarFile) return;
+    setIsUploadingAvatar(true);
+
+    // 1. Fetch secure signed Cloudinary signatures from our Django REST framework settings endpoint
+    const sigRes = await getCloudinarySignatureAction();
+    if (!sigRes.success || !sigRes.signatureData) {
+      toast.error(sigRes.message || "Failed to retrieve Cloudinary signature.");
+      setIsUploadingAvatar(false);
+      return;
+    }
+
+    const { signature, timestamp, api_key, cloud_name, folder } = sigRes.signatureData;
+
+    try {
+      // 2. Pack upload configurations into FormData payloads expected by Cloudinary API specifications
+      const uploadData = new FormData();
+      uploadData.append('file', avatarFile);
+      uploadData.append('api_key', api_key);
+      uploadData.append('timestamp', timestamp.toString());
+      uploadData.append('signature', signature);
+      uploadData.append('folder', folder);
+
+      // 3. Dispatch direct high-speed client-to-Cloudinary upload stream
+      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`, {
+        method: 'POST',
+        body: uploadData,
+      });
+
+      const uploadResult = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadResult.error?.message || "Cloudinary media transfer failed.");
+      }
+
+      // 4. Retrieve secure direct URL returned from Cloudinary servers
+      const secureUrl = uploadResult.secure_url;
+
+      // 5. Update user avatar link in Django database using our standard server action
+      const updateRes = await updateUserProfileAction({ avatar: secureUrl });
+      if (updateRes.success) {
+        toast.success("Profile avatar successfully updated!");
+        // Clear local file states
+        setAvatarFile(null);
+        setAvatarPreview(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        // Sync parent components state details
+        await onRefresh();
+      } else {
+        toast.error(updateRes.message || "Failed to synchronize profile avatar URL.");
+      }
+    } catch (err: any) {
+      toast.error(`Media upload failed: ${err.message || 'Network exception.'}`);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   // Handle PUT submission targeting profile details
   const handleSave = async () => {
@@ -305,25 +422,75 @@ function ProfileSettingsTab({ profile, onRefresh }: ProfileSettingsTabProps) {
       </h3>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start">
+        {/* Hidden Native File Input Element */}
+        <input 
+          type="file" 
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         {/* Avatar change container */}
-        <div className="relative group mx-auto md:mx-0 shrink-0">
-          <div className="h-28 w-28 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
-            {profile.avatar ? (
-              <img 
-                src={profile.avatar} 
-                alt={profile.full_name} 
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-3xl font-black text-zinc-400">{getInitials(profile.full_name)}</span>
+        <div className="flex flex-col items-center gap-3 shrink-0 mx-auto md:mx-0">
+          <div className="relative group">
+            <div className="h-28 w-28 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
+              {/* Show loading overlay if uploading to Cloudinary */}
+              {isUploadingAvatar && (
+                <div className="absolute inset-0 bg-black/60 z-10 flex flex-col items-center justify-center text-white gap-2">
+                  <Loader2 className="animate-spin text-white" size={20} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300">Uploading</span>
+                </div>
+              )}
+
+              {/* Render dynamic local preview if exists, else fallback to active DB image */}
+              {avatarPreview ? (
+                <img 
+                  src={avatarPreview} 
+                  alt="New avatar preview" 
+                  className="h-full w-full object-cover animate-in fade-in duration-200"
+                />
+              ) : profile.avatar ? (
+                <img 
+                  src={profile.avatar} 
+                  alt={profile.full_name} 
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-3xl font-black text-zinc-400">{getInitials(profile.full_name)}</span>
+              )}
+            </div>
+            
+            {/* Camera icon button to open file selector — hidden during previews or uploads */}
+            {!avatarPreview && !isUploadingAvatar && (
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-lg border-2 border-white dark:border-zinc-950 transition-transform hover:scale-110 cursor-pointer"
+              >
+                <Camera size={14} />
+              </button>
             )}
           </div>
-          <button 
-            onClick={() => toast.info('Photo upload selector mock triggered. We will configure direct Cloudinary upload in the next step!')}
-            className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-lg border-2 border-white dark:border-zinc-950 transition-transform hover:scale-110 cursor-pointer"
-          >
-            <Camera size={14} />
-          </button>
+
+          {/* Sleek save/cancel control tray visible only during active image previews */}
+          {avatarPreview && !isUploadingAvatar && (
+            <div className="flex items-center gap-2 animate-in zoom-in-95 duration-200">
+              <button 
+                onClick={handleUploadAvatar}
+                className="flex items-center justify-center p-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:scale-105 transition-all cursor-pointer"
+                title="Save and upload photo"
+              >
+                <Check size={14} />
+              </button>
+              <button 
+                onClick={handleCancelAvatar}
+                className="flex items-center justify-center p-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white shadow-md hover:scale-105 transition-all cursor-pointer"
+                title="Cancel changes"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Input grids */}

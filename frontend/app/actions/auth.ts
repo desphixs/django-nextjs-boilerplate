@@ -679,3 +679,63 @@ export async function updateUserProfileAction(payload: any) {
         };
     }
 }
+
+/**
+ * GET CLOUDINARY SIGNATURE ACTION
+ * 
+ * Analogy:
+ * Think of this action like going to the office manager to request a stamped permission voucher.
+ * We present our credentials badge (the access token), and if verified, the manager stamps a 
+ * cryptographic voucher card (the signature and timestamp) allowing us to drop off our media package 
+ * directly at the Cloudinary deposit locker!
+ */
+export async function getCloudinarySignatureAction() {
+    try {
+        // 1. Retrieve the authenticated user's access token securely from HttpOnly browser cookies.
+        const cookieStore = await cookies();
+        const accessToken = cookieStore.get('access_token')?.value;
+
+        // 2. Reject request immediately if the user is unauthenticated.
+        if (!accessToken) {
+            return {
+                success: false,
+                message: "Authentication credentials were not provided. Please log in.",
+            };
+        }
+
+        // 3. Dispatch secure GET request to the Django signature generator view.
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/cloudinary/signature/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                // Authenticate request using standard SimpleJWT Bearer tokens.
+                'Authorization': `Bearer ${accessToken}`,
+            },
+            // Disable fetch caching to ensure we generate fresh timestamps for signature validation!
+            cache: 'no-store',
+        });
+
+        // 4. Parse the returned JSON response body.
+        const data = await response.json();
+
+        // 5. Check if the backend signature was successfully generated (status 200 OK).
+        if (response.ok) {
+            return {
+                success: true,
+                message: "Cloudinary upload signature generated successfully.",
+                signatureData: data,
+            };
+        } else {
+            return {
+                success: false,
+                message: data.message || data.detail || "Failed to generate upload signature.",
+            };
+        }
+    } catch (error: any) {
+        // 6. Capture unexpected connection drops.
+        return {
+            success: false,
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
