@@ -177,6 +177,10 @@ AUTH_USER_MODEL = 'userauths.User'
 # unified custom exception handler module instead of using the standard error layouts.
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'backend.exception_handler.custom_exception_handler',
+    # Register JWT as the default authentication mechanism
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
     # Register the native anonymous and authenticated user throttling classes.
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',

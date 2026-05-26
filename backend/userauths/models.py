@@ -131,3 +131,48 @@ class UserOTP(models.Model):
 
     def __str__(self):
         return f"OTP for {self.user.email} (Expires: {self.expires_at})"
+
+
+class Profile(models.Model):
+    """
+    USER PROFILE MODEL
+    
+    Analogy:
+    Think of this model like the extended info section on a membership card.
+    The primary User card stores core credentials (email and full name).
+    This Profile card stores additional details like bio, avatar picture URL,
+    and user settings preferences (email notifications, public profile options).
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    bio = models.TextField(blank=True, default='')
+    avatar = models.URLField(max_length=500, blank=True, default='')
+    email_notification = models.BooleanField(default=True)
+    public_profile = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile for {self.user.email}"
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """
+    Signal receiver to automatically create a Profile instance
+    whenever a new User is registered.
+    """
+    if created:
+        Profile.objects.get_or_create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """
+    Signal receiver to save the associated Profile instance
+    whenever the User is updated.
+    """
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+

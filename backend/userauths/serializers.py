@@ -90,3 +90,47 @@ class LoginSerializer(serializers.Serializer):
         required=True,
         style={'input_type': 'password'}
     )
+
+
+from .models import Profile
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    USER PROFILE SERIALIZER
+    
+    Analogy:
+    Think of this serializer like a unified passport updater form.
+    When a citizen submits this form, it updates both their core passport details (full name)
+    and their visa logs / visual picture (bio, avatar url, notifications preferences) in one single go!
+    
+    It supports dotted sources so DRF nests the profile fields cleanly under the 'profile' context dictionary.
+    """
+    bio = serializers.CharField(source='profile.bio', required=False, allow_blank=True)
+    avatar = serializers.URLField(source='profile.avatar', required=False, allow_blank=True)
+    email_notification = serializers.BooleanField(source='profile.email_notification', required=False)
+    public_profile = serializers.BooleanField(source='profile.public_profile', required=False)
+
+    class Meta:
+        model = User
+        fields = ['email', 'full_name', 'bio', 'avatar', 'email_notification', 'public_profile']
+        read_only_fields = ['email']
+
+    def update(self, instance, validated_data):
+        # 1. Safely extract profile nested fields dictionary parsed by DRF's dotted source rules
+        profile_data = validated_data.pop('profile', {})
+
+        # 2. Update parent User fields (like full_name)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # 3. Smart creation: Retrieve or create Profile model instance if it doesn't already exist
+        profile, created = Profile.objects.get_or_create(user=instance)
+
+        # 4. Update the nested Profile fields
+        for attr, value in profile_data.items():
+            setattr(profile, attr, value)
+        profile.save()
+
+        return instance
+

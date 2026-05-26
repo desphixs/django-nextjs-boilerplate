@@ -2,13 +2,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 # Import standard exceptions from DRF to handle secure error routing.
 from rest_framework.exceptions import AuthenticationFailed
 # Import Django's cryptographic signing tools.
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 # Import our custom database models to track token consumption and secure OTPs.
-from .models import UsedToken, UserOTP
+from .models import UsedToken, UserOTP, Profile
 # Import python's standard random and datetime modules to generate secure OTP codes and lifespans.
 import random
 from datetime import timedelta
@@ -29,7 +29,7 @@ User = get_user_model()
 from django.contrib.auth import authenticate
 
 # Import our custom serializers to clean and validate incoming payloads.
-from .serializers import RegisterSerializer, LoginSerializer
+from .serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer
 
 # Import the JWT generation tool from SimpleJWT.
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -643,5 +643,46 @@ class VerifyOTPView(APIView):
                 'error': f'Incorrect verification code. You have {attempts_remaining} attempts remaining.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+
+class UserProfileView(APIView):
+    """
+    USER PROFILE RETRIEVAL AND UPDATE VIEW
+    
+    Analogy:
+    Think of this view like the clerk's counter at a secure members-only fitness club.
+    When a member approaches:
+    1. They must show their valid membership card (IsAuthenticated token).
+    2. GET: The clerk reads the files in their locker (bio, avatar, full name, email, settings) and reads them back.
+    3. PUT/PATCH: The member hands over a sheet of updates. The clerk updates the file.
+       If the member's extended info record is somehow missing (e.g. database artifact glitch),
+       the clerk smartly creates a blank profile template first, then applies the updates so nothing breaks!
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        # Smart check: Ensure a Profile exists before serializing to be extra bulletproof
+        Profile.objects.get_or_create(user=user)
+        
+        serializer = UserProfileSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        user = request.user
+        # Smart check: Ensure a Profile exists before updating to satisfy user constraints
+        Profile.objects.get_or_create(user=user)
+        
+        serializer = UserProfileSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Profile updated successfully.",
+                "user": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        # PATCH is just a shorthand delegation for our partial-supported PUT handler
+        return self.put(request)
 
 
