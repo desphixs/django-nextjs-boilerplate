@@ -232,3 +232,11 @@ ANYMAIL = {
 # The base URL of your frontend — used to build magic link URLs in emails
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 
+# ==============================================================================
+# CLOUDINARY CONFIGURATION (Direct signed media uploads)
+# ==============================================================================
+CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='')
+CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='')
+CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='')
+
+

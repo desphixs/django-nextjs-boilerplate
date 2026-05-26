@@ -719,4 +719,54 @@ class PasswordChangeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class CloudinarySignatureView(APIView):
+    """
+    CLOUDINARY SIGNATURE GENERATOR VIEW
+    
+    Analogy:
+    Think of this view like a secure ticket-issuing booth at a private museum.
+    1. The visitor presents their verified VIP entry card (IsAuthenticated Bearer token).
+    2. They request a signed key pass to deposit a package in locker #24 (request.user.id).
+    3. The clerk generates a timestamp, sorts the locker details, hashes them using the bank's secret code
+       (CLOUDINARY_API_SECRET), and stamps a unique digital seal (signature).
+    4. The visitor takes this stamped pass and goes straight to the locker company (Cloudinary)
+       to deposit their file, without our central server having to carry the heavy package!
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import time
+        import hashlib
+        
+        timestamp = int(time.time())
+        # Set up parameters to sign according to Cloudinary instructions
+        folder_path = f"user_uploads/{request.user.id}"
+        
+        params_to_sign = {
+            'timestamp': timestamp,
+            'folder': folder_path,
+        }
+        
+        # Sort parameter keys alphabetically
+        sorted_params = sorted(params_to_sign.items())
+        
+        # Construct key=value query string
+        query_string = "&".join(f"{k}={v}" for k, v in sorted_params)
+        
+        # Append the hidden api_secret directly at the end of the query string
+        string_to_sign = f"{query_string}{settings.CLOUDINARY_API_SECRET}"
+        
+        # Calculate SHA-1 hexadecimal hash digest signature
+        signature = hashlib.sha1(string_to_sign.encode('utf-8')).hexdigest()
+        
+        return Response({
+            'signature': signature,
+            'timestamp': timestamp,
+            'api_key': settings.CLOUDINARY_API_KEY,
+            'cloud_name': settings.CLOUDINARY_CLOUD_NAME,
+            'folder': folder_path
+        }, status=status.HTTP_200_OK)
+
+
+
 
