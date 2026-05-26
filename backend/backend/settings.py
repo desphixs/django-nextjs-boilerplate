@@ -255,3 +255,12 @@ CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='')
 CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='')
 
 
+# ==============================================================================
+# GDPR ACCOUNT DELETION COMPLIANCE CONFIGURATION
+# ==============================================================================
+# If set to True, accounts will be physically/permanently deleted from the database.
+# If set to False, accounts will be soft-deleted (is_active=False) and PII scrubbed.
+ACCOUNT_DELETION_HARD_DELETE = env.bool('ACCOUNT_DELETION_HARD_DELETE', default=False)
+
+
+

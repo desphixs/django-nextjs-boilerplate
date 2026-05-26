@@ -768,5 +768,100 @@ class CloudinarySignatureView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class DeleteAccountView(APIView):
+    """
+    GDPR-COMPLIANT ACCOUNT DELETION VIEW
+
+    Analogy:
+    Imagine you are a member of an exclusive country club. You walk up to the receptionist
+    and request to completely delete your membership folder (GDPR Right to be Forgotten).
+    Before taking such a serious and destructive action, the receptionist asks for your physical
+    security password to prove you are indeed the actual owner of the folder.
+
+    Once confirmed, the club checks its compliance handbook (Django settings configuration):
+    1. HARD DELETE: We grab your entire folder and throw it directly into a roaring paper shredder (user.delete()).
+       Every single record is permanently turned to ash and erased from the universe.
+    2. SOFT DELETE: If the club is legally required to keep your billing invoices, we can't shred
+       the physical folder. Instead, we use white-out to permanently scrub your name, biography,
+       and avatar, replace your email with a randomized ID code (so you can never be identified),
+       change the password to a random lock we throw away, and mark the card "INACTIVE".
+       Your transactions are preserved, but you have been completely forgotten!
+    """
+    # Force the user to be securely logged in to execute account deletion.
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import uuid  # Import Python's unique ID generator to scramble soft-deleted email fields
+        
+        # 1. Retrieve the password from the incoming request payload.
+        password = request.data.get('password', '').strip()
+        
+        # 2. Check if a password was provided.
+        if not password:
+            return Response(
+                {"error": "Password confirmation is required to delete your account."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Fetch the currently authenticated user object from the request.
+        user = request.user
+        
+        # 3. Check if the provided password matches the hashed password in our database.
+        if not user.check_password(password):
+            return Response(
+                {"error": "Incorrect password. Account deletion aborted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 4. Check our compliance settings to determine the deletion configuration.
+        # We check settings.py for ACCOUNT_DELETION_HARD_DELETE, defaulting to False (soft-delete).
+        hard_delete = getattr(settings, 'ACCOUNT_DELETION_HARD_DELETE', False)
+        
+        if hard_delete:
+            # 5. HARD DELETE ROUTINE (Irreversible database purge)
+            # This deletes the user record from the SQLite database.
+            # Because related tables like UserOTP and Profile are linked via models.CASCADE,
+            # they are automatically deleted!
+            user.delete()
+            
+            return Response({
+                "success": True,
+                "message": "Your account and all associated data have been permanently and irreversibly deleted in compliance with GDPR regulations."
+            }, status=status.HTTP_200_OK)
+            
+        else:
+            # 6. SOFT DELETE / ANONYMIZATION ROUTINE (GDPR-Compliant Scrubbing)
+            # We scrub all personal identifying information (PII) from the User model first.
+            user.full_name = "Deleted User"
+            
+            # Scramble the email using a unique, randomized ID code to prevent uniqueness collisions.
+            user.email = f"deleted_{uuid.uuid4().hex[:12]}@staqed.internal"
+            
+            # Change the password to a randomized string that is discarded, locking the user out forever.
+            user.set_password(User.objects.make_random_password())
+            
+            # Deactivate the user so they can never authenticate or request fresh codes again.
+            user.is_active = False
+            
+            # Commit the scrubbed user model changes to the database.
+            user.save()
+            
+            # 7. Profile Scrubbing
+            # If the user has a profile record, we must clean all biographical and visual information.
+            profile = getattr(user, 'profile', None)
+            if profile:
+                profile.bio = ""
+                profile.avatar = ""
+                profile.email_notification = False
+                profile.public_profile = False
+                profile.save()
+                
+            return Response({
+                "success": True,
+                "message": "Your account has been successfully closed, and all personally identifiable information (PII) has been permanently scrubbed under GDPR compliance rules."
+            }, status=status.HTTP_200_OK)
+
+
+
 
 
