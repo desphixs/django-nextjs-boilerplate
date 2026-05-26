@@ -177,6 +177,17 @@ AUTH_USER_MODEL = 'userauths.User'
 # unified custom exception handler module instead of using the standard error layouts.
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'backend.exception_handler.custom_exception_handler',
+    # Register the native anonymous and authenticated user throttling classes.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    # Define rate limiting thresholds for unauthenticated visitors and authentication endpoints.
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+        'auth_anon': '5/minute',  # Strict boundary restricting unauthenticated traffic targeting auth views to 5 per minute
+    }
 }
 
 

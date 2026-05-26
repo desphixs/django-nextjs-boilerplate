@@ -29,10 +29,15 @@ from .serializers import RegisterSerializer, LoginSerializer
 # Import the JWT generation tool from SimpleJWT.
 from rest_framework_simplejwt.tokens import RefreshToken
 
+# Import our custom AuthAnonRateThrottle to restrict unauthenticated request spams.
+from .throttles import AuthAnonRateThrottle
+
 # Define the custom user registration endpoint.
 class RegisterView(APIView):
     # Allow any guest/unauthenticated user to access the registration endpoint.
     permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to register requests.
+    throttle_classes = [AuthAnonRateThrottle]
 
     # Handle incoming HTTP POST requests for creating new users.
     def post(self, request):
@@ -71,6 +76,8 @@ class RegisterView(APIView):
 class LoginView(APIView):
     # Allow any guest/unauthenticated user to access the login endpoint.
     permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to login requests.
+    throttle_classes = [AuthAnonRateThrottle]
 
     # Handle incoming HTTP POST requests for authenticating users.
     def post(self, request):
@@ -344,6 +351,8 @@ class RequestMagicLinkView(APIView):
     """
     # Allow any guest/unauthenticated user to request a magic link.
     permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to magic link request generators.
+    throttle_classes = [AuthAnonRateThrottle]
 
     def post(self, request):
         # 1. Retrieve the email address from the incoming request payload.
@@ -399,6 +408,8 @@ class VerifyMagicLinkView(APIView):
     """
     # Allow any guest/unauthenticated user to verify their token.
     permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to magic link verifiers.
+    throttle_classes = [AuthAnonRateThrottle]
 
     def post(self, request):
         # 1. Retrieve the token from query parameters or request body payload.
