@@ -1,16 +1,16 @@
 'use client';
 
 // Import necessary React and third-party hooks.
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 
-// Import our secure Next.js Server Action for handling logins.
-import { loginAction, requestMagicLinkAction } from '@/app/actions/auth';
-// Import our type-safe environment configurations to safely read client IDs.
+// Import our secure Next.js Server Actions for handling auth flows.
+import { loginAction, requestMagicLinkAction, requestOtpAction, verifyOtpAction } from '@/app/actions/auth';
+// Import our type-safe, validated environment settings to safely read client IDs.
 import { env } from '@/app/env';
 
 // Import modern icons from lucide-react.
@@ -61,6 +61,15 @@ export default function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpEmail, setOtpEmail] = useState('');
 
+  // OTP Countdown Timer State (starts at 300 seconds = 5 minutes).
+  const [countdown, setCountdown] = useState(300);
+
+  // OTP Input boxes characters state (an array of 6 elements representing each digit).
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(''));
+
+  // React Refs array to store focus references for each of the 6 OTP input boxes.
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   // Password visibility controls.
   const [showPassword, setShowPassword] = useState(false);
   
@@ -82,6 +91,89 @@ export default function LoginPage() {
     resolver: zodResolver(otpVerifySchema),
     defaultValues: { email: '', otp: '' },
   });
+
+  // Format seconds into highly professional MM:SS countdown format.
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Timer ticker hook to count down remaining OTP validity seconds.
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (otpSent && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpSent, countdown]);
+
+  // Focus-Jumping logic for text changes inside independent input boxes.
+  const handleOtpChange = (value: string, index: number) => {
+    // Standardize input by purging non-numeric input digits using regex.
+    const cleanValue = value.replace(/[^0-9]/g, '');
+    
+    if (!cleanValue) {
+      // If the character is deleted, update state to empty.
+      const newDigits = [...otpDigits];
+      newDigits[index] = '';
+      setOtpDigits(newDigits);
+      // Synchronize react-hook-form OTP value with the combined string.
+      otpForm.setValue('otp', newDigits.join(''));
+      return;
+    }
+
+    // Handle full 6-digit OTP code paste events or typed strings.
+    if (cleanValue.length > 1) {
+      const pastedDigits = cleanValue.slice(0, 6).split('');
+      const newDigits = [...otpDigits];
+      for (let i = 0; i < 6; i++) {
+        if (pastedDigits[i] !== undefined) {
+          newDigits[i] = pastedDigits[i];
+        }
+      }
+      setOtpDigits(newDigits);
+      otpForm.setValue('otp', newDigits.join(''));
+      
+      // Automatically jump focus to the last entered digit or 6th slot.
+      const nextFocusIndex = Math.min(pastedDigits.length, 5);
+      inputRefs.current[nextFocusIndex]?.focus();
+      return;
+    }
+
+    // Standard single-digit input processing.
+    const newDigits = [...otpDigits];
+    newDigits[index] = cleanValue;
+    setOtpDigits(newDigits);
+    otpForm.setValue('otp', newDigits.join(''));
+
+    // UX Focus Jumping: Shift focus to the next adjacent slot if we entered a digit.
+    if (index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  // Backspace key event controller to automate backward focus transitions.
+  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Backspace') {
+      // If the current box is already empty, purge the previous slot's digit and jump focus back.
+      if (!otpDigits[index] && index > 0) {
+        const newDigits = [...otpDigits];
+        newDigits[index - 1] = '';
+        setOtpDigits(newDigits);
+        otpForm.setValue('otp', newDigits.join(''));
+        inputRefs.current[index - 1]?.focus();
+      } else {
+        // Otherwise, simply purge the current input box's digit.
+        const newDigits = [...otpDigits];
+        newDigits[index] = '';
+        setOtpDigits(newDigits);
+        otpForm.setValue('otp', newDigits.join(''));
+      }
+    }
+  };
 
   /**
    * EMAIL & PASSWORD SUBMISSION (FUNCTIONAL)
@@ -148,36 +240,57 @@ export default function LoginPage() {
   };
 
   /**
-   * OTP GENERATION REQUEST (RAW UI STUB)
+   * OTP GENERATION REQUEST (FUNCTIONAL)
    * 
-   * Simulates sending a verification OTP on the client side.
+   * Connects to our requestOtpAction Server Action.
    */
   const onOtpRequest = async (values: EmailOnlyFormValues) => {
     setIsSubmitting(true);
     const toastId = toast.loading('Generating secure verification OTP code...');
 
-    setTimeout(() => {
-      toast.success('6-digit code sent to your email!', { id: toastId });
-      setOtpEmail(values.email);
-      otpForm.setValue('email', values.email);
-      setOtpSent(true);
+    try {
+      const result = await requestOtpAction(values);
+      if (result.success) {
+        toast.success(result.message || '6-digit verification code successfully sent to your email!', { id: toastId });
+        setOtpEmail(values.email);
+        otpForm.setValue('email', values.email);
+        setOtpDigits(Array(6).fill('')); // Clear individual character inputs
+        otpForm.setValue('otp', ''); // Clear react-hook-form value
+        setOtpSent(true);
+        setCountdown(300); // Reset timer to exactly 5 minutes (300 seconds)
+      } else {
+        toast.error(result.message || 'Failed to request verification code.', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('A network connection error occurred.', { id: toastId });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   /**
-   * OTP CODE VERIFICATION (RAW UI STUB)
+   * OTP CODE VERIFICATION (FUNCTIONAL)
    * 
-   * Simulates verifying an OTP code.
+   * Handshakes directly with our verifyOtpAction Server Action.
    */
   const onOtpVerify = async (values: OtpVerifyFormValues) => {
     setIsSubmitting(true);
     const toastId = toast.loading('Verifying security token...');
 
-    setTimeout(() => {
-      toast.error('OTP feature is not fully wired to the backend in this phase.', { id: toastId });
+    try {
+      const result = await verifyOtpAction(values);
+      if (result.success) {
+        toast.success(result.message || 'Authenticated successfully! Welcome back.', { id: toastId });
+        router.refresh();
+        router.push('/');
+      } else {
+        toast.error(result.message || 'Verification failed. Please check the code.', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('A network connection error occurred.', { id: toastId });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   /**
@@ -480,37 +593,81 @@ export default function LoginPage() {
                   <strong className="text-zinc-900 dark:text-white">{otpEmail}</strong>
                 </p>
 
+                {/* Hidden fields to properly capture and validate inputs in react-hook-form */}
                 <input type="hidden" {...otpForm.register('email')} />
+                <input type="hidden" {...otpForm.register('otp')} />
 
-                <div className="space-y-1.5">
-                  <input
-                    {...otpForm.register('otp')}
-                    type="text"
-                    maxLength={6}
-                    placeholder="000000"
-                    className="w-full text-center text-2xl font-bold tracking-[0.5em] py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white outline-none focus:border-zinc-900 dark:focus:border-zinc-200 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30"
-                  />
-                  {otpForm.formState.errors.otp && (
-                    <p className="text-center text-xs font-medium text-red-500">{otpForm.formState.errors.otp.message}</p>
-                  )}
+                {/* Grid of 6 focus-jumping numeric character boxes */}
+                <div className="flex justify-between items-center gap-2 py-4">
+                  {otpDigits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        // Capture the reference to the input box so we can programmatically trigger .focus()
+                        inputRefs.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(e.target.value, idx)}
+                      onKeyDown={(e) => handleOtpKeyDown(e, idx)}
+                      className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white focus:border-zinc-950 dark:focus:border-zinc-50 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none transition-all duration-200"
+                    />
+                  ))}
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full h-12 rounded-xl bg-zinc-950 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-black font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span>Verify OTP Code</span>
-                  )}
-                </button>
+                {otpForm.formState.errors.otp && (
+                  <p className="text-center text-xs font-medium text-red-500">{otpForm.formState.errors.otp.message}</p>
+                )}
 
+                {/* Automated Countdown Ticker UI */}
+                <div className="flex flex-col items-center justify-center space-y-1.5 py-1">
+                  <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                    {countdown > 0 ? (
+                      <span className="flex items-center gap-1.5">
+                        Code expires in <span className="font-mono font-bold text-zinc-950 dark:text-white">{formatTime(countdown)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-red-500 font-semibold">Verification code has expired</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* Render the submit button ONLY if the passcode is still valid */}
+                {countdown > 0 ? (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full h-12 rounded-xl bg-zinc-950 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-black font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <span>Verify OTP Code</span>
+                    )}
+                  </button>
+                ) : (
+                  /* When the timer hits zero, disable code submission and reveal a clean option to resend code */
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Request a fresh OTP using the stored email
+                      onOtpRequest({ email: otpEmail });
+                    }}
+                    className="w-full h-12 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-850 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-zinc-200/50 dark:border-zinc-700/50"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Resend Verification Code</span>
+                  </button>
+                )}
+
+                {/* Back Link to reuse the form or try a different email */}
                 <button
                   type="button"
                   onClick={() => setOtpSent(false)}
-                  className="w-full text-center text-xs font-semibold text-zinc-500 hover:text-zinc-950 dark:hover:text-white hover:underline transition-colors"
+                  className="w-full text-center text-xs font-semibold text-zinc-500 hover:text-zinc-950 dark:hover:text-white hover:underline transition-colors pt-2"
                 >
                   Use a different email
                 </button>

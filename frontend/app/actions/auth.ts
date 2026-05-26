@@ -378,3 +378,124 @@ export async function logoutAction() {
   redirect('/login');
 }
 
+/**
+ * REQUEST OTP SERVER ACTION
+ * 
+ * Analogy:
+ * Think of this action like a secure messenger. You tell it your email,
+ * and it runs to the hotel clerk's desk (the Django API) to ask for a temporary security pass code.
+ * The messenger waits for the server clerk to verify your account, clear out any stale codes,
+ * print a new 6-digit combination, and dispatch it to your inbox!
+ * Then the messenger returns to the client with the good news that the code is on its way.
+ */
+export async function requestOtpAction(payload: { email: string }) {
+    try {
+        // 1. Send an asynchronous POST request to our secure Django OTP generation endpoint.
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/otp/request/`, {
+            method: 'POST', // We use POST because we are initiating/submitting a dynamic generation request
+            headers: {
+                'Content-Type': 'application/json', // Inform Django that the body is formatted as JSON
+            },
+            body: JSON.stringify(payload), // Serialize our payload object containing the email
+        });
+
+        // 2. Parse the returned JSON response body.
+        const data = await response.json();
+
+        // 3. Evaluate if the request was successfully processed by our backend endpoint.
+        if (response.ok) {
+            return {
+                success: true, // Success flag
+                message: data.message || 'OTP verification code successfully sent to your email.', // Success feedback message
+            };
+        } else {
+            return {
+                success: false, // Failure flag
+                message: data.message || data.error || 'Failed to generate OTP code. Please ensure your email is correct.', // Error explanation
+            };
+        }
+    } catch (error: any) {
+        // Catch and report any network connection failures.
+        return {
+            success: false, // Failure flag
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
+
+/**
+ * VERIFY OTP SERVER ACTION
+ * 
+ * Analogy:
+ * Think of this like presenting your 6-digit gate passcode to the hotel bouncer.
+ * The client hands their email and typed passcode to our server messenger.
+ * The messenger travels securely to the Django database, compares the passcode hashes,
+ * and checks the expiration timer.
+ * If the passcode matches, the bouncer issues your session access credentials (JWT tokens).
+ * The server messenger takes these tokens and saves them securely in the browser's HttpOnly cookies vault!
+ * Now you are officially logged in, and the messenger reports the successful session.
+ */
+export async function verifyOtpAction(payload: { email: string; otp: string }) {
+    try {
+        // 1. Send an asynchronous POST request to our secure Django OTP verification endpoint.
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/otp/verify/`, {
+            method: 'POST', // We use POST because we are submitting credentials for validation
+            headers: {
+                'Content-Type': 'application/json', // Notify Django that the body payload is JSON
+            },
+            body: JSON.stringify(payload), // Convert the { email, otp } object into a JSON string
+        });
+
+        // 2. Parse the returned JSON response body.
+        const data = await response.json();
+
+        // 3. Evaluate if the passcode is authentic and has been verified by the backend view.
+        if (response.ok) {
+            // Retrieve and await the Next.js asynchronous cookie helper to gain cookie write permission.
+            const cookieStore = await cookies();
+
+            // Extract the access and refresh JWT token credentials returned from Django.
+            const accessToken = data.access;
+            const refreshToken = data.refresh;
+
+            // Store the short-term access token in a secure browser cookie.
+            cookieStore.set('access_token', accessToken, {
+                httpOnly: true, // Block client-side JavaScript access to prevent XSS credential stealing!
+                secure: process.env.NODE_ENV === 'production', // Only require HTTPS in production hosts
+                sameSite: 'lax', // Secure SameSite settings to mitigate CSRF attacks
+                path: '/', // Allow the cookie to be active across all subdirectories of our app
+                maxAge: 60 * 60, // Set cookie life to 1 hour, matching access token lifespan
+            });
+
+            // Store the long-term refresh token in a secure browser cookie.
+            if (refreshToken) {
+                cookieStore.set('refresh_token', refreshToken, {
+                    httpOnly: true, // Lock JavaScript access for maximum frontend isolation
+                    secure: process.env.NODE_ENV === 'production', // Local HTTP hosts work fine in dev
+                    sameSite: 'lax', // Apply Lax SameSite restriction for standard CSRF protection
+                    path: '/', // Allow the cookie to be active globally
+                    maxAge: 7 * 24 * 60 * 60, // Set cookie life to 7 days, matching the backend refresh token
+                });
+            }
+
+            return {
+                success: true, // Success flag
+                message: data.message || 'Authenticated successfully.', // Success message
+                user: data.user, // Pass back user profile details
+            };
+        } else {
+            return {
+                success: false, // Failure flag
+                message: data.error || data.message || 'OTP verification failed. Please try again.', // Detailed error text
+            };
+        }
+    } catch (error: any) {
+        // Intercept and report any network connection issues.
+        return {
+            success: false, // Failure flag
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
+
+
