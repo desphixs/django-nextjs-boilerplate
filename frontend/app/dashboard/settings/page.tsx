@@ -6,12 +6,13 @@ import DashboardWrapper from '@/components/dashboard/DashboardWrapper';
 import { 
   Settings, User, Shield, Trash2, 
   Bell, Globe, Mail, Lock, Camera, AlertTriangle,
-  Check, X, Loader2
+  Check, X, Loader2, Eye, EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 // Import our secure profile server actions to fetch and update details
-import { getUserProfileAction, updateUserProfileAction, getCloudinarySignatureAction, deleteAccountAction } from '@/app/actions/auth';
+import { getUserProfileAction, updateUserProfileAction, getCloudinarySignatureAction, deleteAccountAction, changePasswordAction } from '@/app/actions/auth';
+
 
 
 type Tab = 'general' | 'profile' | 'password' | 'delete';
@@ -552,18 +553,70 @@ function PasswordSettingsTab() {
     newPassword: '',
     confirmPassword: '',
   });
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Independent state toggles to show/hide raw characters in each password input field
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
+    // 1. Boundary filter: Guarantee all inputs are populated
     if (!passwords.oldPassword || !passwords.newPassword || !passwords.confirmPassword) {
-      toast.error('Please populate all password key inputs.');
+      toast.error('Please fill in all password fields.');
       return;
     }
+
+    // 2. Boundary filter: Ensure new password confirmation matches exactly
     if (passwords.newPassword !== passwords.confirmPassword) {
-      toast.error('New password keys confirm miss.');
+      toast.error('New password and confirmation do not match.');
       return;
     }
-    toast.success('Credentials keys successfully scrambled (Mock UI)!');
-    setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
+
+    // 3. Client-side sanity check: Enforce password complexity before network transfer
+    const password = passwords.newPassword;
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters long.');
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      toast.error('Password must contain at least one uppercase letter.');
+      return;
+    }
+    if (!/[a-z]/.test(password)) {
+      toast.error('Password must contain at least one lowercase letter.');
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      toast.error('Password must contain at least one number.');
+      return;
+    }
+    if (!/[@#$!%*?&]/.test(password)) {
+      toast.error('Password must contain at least one special character (e.g. @, #, $, !, %, *, ?, &).');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // 4. Dispatch secure password change server action
+      const res = await changePasswordAction({
+        current_password: passwords.oldPassword,
+        new_password: passwords.newPassword,
+        confirm_new_password: passwords.confirmPassword,
+      });
+
+      if (res.success) {
+        toast.success(res.message || 'Password successfully updated!');
+        setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        toast.error(res.message || 'Failed to update password.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'An unexpected error occurred during password change.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -582,12 +635,21 @@ function PasswordSettingsTab() {
               <Lock size={16} />
             </div>
             <input 
-              type="password" 
+              type={showOldPassword ? "text" : "password"} 
               value={passwords.oldPassword}
               onChange={(e) => setPasswords({ ...passwords, oldPassword: e.target.value })}
+              disabled={isSaving}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-4 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-12 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none disabled:opacity-50"
             />
+            <button 
+              type="button"
+              onClick={() => setShowOldPassword(!showOldPassword)}
+              disabled={isSaving}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none disabled:opacity-50 cursor-pointer"
+            >
+              {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
         </div>
 
@@ -599,12 +661,21 @@ function PasswordSettingsTab() {
               <Lock size={16} />
             </div>
             <input 
-              type="password" 
+              type={showNewPassword ? "text" : "password"} 
               value={passwords.newPassword}
               onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+              disabled={isSaving}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-4 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-12 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none disabled:opacity-50"
             />
+            <button 
+              type="button"
+              onClick={() => setShowNewPassword(!showNewPassword)}
+              disabled={isSaving}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none disabled:opacity-50 cursor-pointer"
+            >
+              {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
         </div>
 
@@ -616,20 +687,38 @@ function PasswordSettingsTab() {
               <Lock size={16} />
             </div>
             <input 
-              type="password" 
+              type={showConfirmPassword ? "text" : "password"} 
               value={passwords.confirmPassword}
               onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+              disabled={isSaving}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-4 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-2.5 pl-11 pr-12 text-sm transition-all focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30 outline-none disabled:opacity-50"
             />
+            <button 
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              disabled={isSaving}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none disabled:opacity-50 cursor-pointer"
+            >
+              {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
         </div>
 
+
         <button 
           onClick={handleUpdate}
-          className="mt-2 w-full px-6 py-2.5 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 text-xs font-bold hover:shadow-md cursor-pointer transition-shadow"
+          disabled={isSaving}
+          className="mt-2 w-full px-6 py-2.5 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 text-xs font-bold hover:shadow-md cursor-pointer transition-all disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          Update Secure Password
+          {isSaving ? (
+            <>
+              <Loader2 className="animate-spin animate-infinite duration-1000" size={14} />
+              <span>Updating Password...</span>
+            </>
+          ) : (
+            <span>Update Secure Password</span>
+          )}
         </button>
 
       </div>

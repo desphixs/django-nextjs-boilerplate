@@ -805,3 +805,87 @@ export async function deleteAccountAction(password: string) {
     }
 }
 
+
+/**
+ * SECURE PASSWORD CHANGE SERVER ACTION
+ * 
+ * Analogy:
+ * Think of this action like visiting the central vault keymaster.
+ * 1. The keymaster checks your VIP access badge (the access token from HttpOnly cookies).
+ * 2. If authenticated, they ask you to fill out a secure form containing:
+ *    - The current vault combination key (current_password) to verify ownership.
+ *    - The new strong vault combination key (new_password) to write down.
+ *    - A duplicate copy (confirm_new_password) to ensure no typos were made.
+ * 3. The keymaster passes this form securely to our Django backend to scramble the new lock key.
+ * 4. If Django succeeds, they return a successful validation report, locking your folder with the new key!
+ */
+export async function changePasswordAction(payload: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+}) {
+    try {
+        // 1. Retrieve the authenticated user's access token securely from HttpOnly browser cookies.
+        const cookieStore = await cookies();
+        const accessToken = cookieStore.get('access_token')?.value;
+
+        // 2. Reject request immediately if the user is unauthenticated.
+        if (!accessToken) {
+            return {
+                success: false,
+                message: "Authentication credentials were not provided. Please log in.",
+            };
+        }
+
+        // 3. Dispatch secure POST request to the Django password change view controller.
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/password/change/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Authenticate request using standard SimpleJWT Bearer tokens.
+                'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        // 4. Parse the returned JSON response body.
+        const data = await response.json();
+
+        // 5. Evaluate if the change succeeded.
+        if (response.ok) {
+            return {
+                success: true,
+                message: data.message || "Password changed successfully.",
+            };
+        } else {
+            // DRF returns validation errors inside nested objects.
+            // If they are nested validation arrays, format them into a single string.
+            let errorMessage = "Failed to change password. Please check your entries.";
+            if (data.new_password) {
+                errorMessage = Array.isArray(data.new_password) ? data.new_password[0] : data.new_password;
+            } else if (data.current_password) {
+                errorMessage = Array.isArray(data.current_password) ? data.current_password[0] : data.current_password;
+            } else if (data.confirm_new_password) {
+                errorMessage = Array.isArray(data.confirm_new_password) ? data.confirm_new_password[0] : data.confirm_new_password;
+            } else if (data.non_field_errors) {
+                errorMessage = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors;
+            } else if (data.detail) {
+                errorMessage = data.detail;
+            } else if (data.message) {
+                errorMessage = data.message;
+            }
+            return {
+                success: false,
+                message: errorMessage,
+            };
+        }
+    } catch (error: any) {
+        // 6. Capture unexpected connection drops.
+        return {
+            success: false,
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
+
+
