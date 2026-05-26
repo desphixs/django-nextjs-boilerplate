@@ -107,3 +107,27 @@ class UsedToken(models.Model):
 
     def __str__(self):
         return f"Used: {self.token[:30]}..."
+
+
+class UserOTP(models.Model):
+    """
+    USER ONE-TIME PASSWORD (OTP) MODEL
+    
+    Analogy:
+    Think of this model like a temporary gate pass issued to a visitor.
+    It contains:
+    - user: A link to the registered user profile in our database.
+    - code: The secret numeric code, hashed/encrypted so that if our database is ever
+            compromised, the raw digits cannot be read!
+    - expires_at: A self-destruct timer set exactly 5 minutes out from generation.
+    - attempts: A counter recording how many failed attempts have been made. If someone guesses incorrectly
+                3 consecutive times, the pass is instantly deleted!
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    code = models.CharField(max_length=255)  # Scrambled/hashed 6-digit numeric code
+    expires_at = models.DateTimeField()
+    attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"OTP for {self.user.email} (Expires: {self.expires_at})"

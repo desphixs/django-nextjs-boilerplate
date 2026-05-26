@@ -60,3 +60,27 @@ def send_magic_link_email(to_email: str, magic_link: str, full_name: str = '') -
         html_message=html_message,
         fail_silently=False,
     )
+
+
+def send_otp_email(to_email: str, otp_code: str, full_name: str = '') -> None:
+    """
+    Sends a beautiful custom OTP verification email containing a 6-digit passcode.
+    """
+    subject = 'Your Staqed One-Time Passcode'
+    
+    context = {
+        'name': full_name or 'there',
+        'otp_code': otp_code
+    }
+    
+    html_message = render_to_string('emails/otp.html', context)
+    plain_message = strip_tags(html_message)
+
+    send_mail(
+        subject=subject,
+        message=plain_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[to_email],
+        html_message=html_message,
+        fail_silently=False,
+    )

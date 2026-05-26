@@ -7,8 +7,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import AuthenticationFailed
 # Import Django's cryptographic signing tools.
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
-# Import our custom database UsedToken model to track token consumption.
-from .models import UsedToken
+# Import our custom database models to track token consumption and secure OTPs.
+from .models import UsedToken, UserOTP
+# Import python's standard random and datetime modules to generate secure OTP codes and lifespans.
+import random
+from datetime import timedelta
+from django.utils import timezone
+from django.contrib.auth.hashers import make_password, check_password
 
 # Import requests as http_requests to manage standard client-side API exchanges.
 import requests as http_requests
@@ -473,5 +478,170 @@ class VerifyMagicLinkView(APIView):
         )
 
         return response
+
+
+class RequestOTPView(APIView):
+    """
+    REQUEST OTP VIEW
+    
+    Analogy:
+    Think of this like asking a bank clerk to send a temporary security code to your phone.
+    The clerk checks your ID (email). If you are a registered customer and your account is active,
+    the clerk shreds any old, unused sticky notes containing previous codes for safety.
+    Then, the clerk generates a fresh, random 6-digit numeric combination, scrambles it (make_password)
+    so no one else can read it, saves it with a 5-minute self-destruct timer, and writes it down in the secure ledger.
+    During debugging, we write the code clearly to the server console log so you can inspect it!
+    """
+    # Allow any guest/unauthenticated user to request an OTP code.
+    permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to OTP requests.
+    throttle_classes = [AuthAnonRateThrottle]
+
+    def post(self, request):
+        # 1. Retrieve the email address from the incoming request payload.
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'Email address is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Check if the user exists and is active.
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'No account found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not user.is_active:
+            return Response({'error': 'This account is inactive. Please contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Automatically purge any pre-existing unused OTP records for this user (Lifecycle Handling).
+        UserOTP.objects.filter(user=user).delete()
+
+        # 4. Generate a secure, random 6-digit numeric combination.
+        otp_digits = "".join(random.choices("0123456789", k=6))
+
+        # 5. Scramble and hash the code using make_password, then save it with a 5-minute lifespan.
+        expires_at = timezone.now() + timedelta(minutes=5)
+        hashed_code = make_password(otp_digits)
+        UserOTP.objects.create(user=user, code=hashed_code, expires_at=expires_at)
+
+        # 6. Dispatch the beautiful HTML email to the user with the secure passcode.
+        try:
+            from .emails import send_otp_email
+            send_otp_email(
+                to_email=email,
+                otp_code=otp_digits,
+                full_name=user.full_name
+            )
+        except Exception:
+            return Response({'error': 'Failed to send OTP code. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 7. Wire the system to write the generated numeric sequence clearly to the server terminal shell for inspection during debugging.
+        print("\n" + "=" * 50)
+        print(f"🔥 DEBUG OTP DISPATCH FOR: {user.email}")
+        print(f"👉 YOUR SECURE 6-DIGIT CODE IS: {otp_digits}")
+        print(f"⏰ EXPIRES AT: {expires_at.strftime('%Y-%m-%d %H:%M:%S')} (5 MINUTES LIFESPAN)")
+        print("=" * 50 + "\n")
+
+        # Return a success report payload.
+        return Response({'message': '6-digit verification code successfully sent to your email.'}, status=status.HTTP_200_OK)
+
+
+class VerifyOTPView(APIView):
+    """
+    VERIFY OTP VIEW
+    
+    Analogy:
+    Think of this like typing the 6-digit code at the entrance turnstile.
+    The gatekeeper checks if you have a registered ticket (email) and asks for the code.
+    They read the scrambled code in their secure ledger, decrypt/compare it, and verify that the 5-minute
+    self-destruct timer has not expired.
+    
+    Crucially, we build a consecutive failure tracker: if you guess incorrectly 3 consecutive times,
+    we instantly shred your ticket (delete the OTP record), completely locking the pipeline
+    and requiring you to request a brand-new code from scratch!
+    """
+    # Allow any guest/unauthenticated user to verify their OTP.
+    permission_classes = [AllowAny]
+    # Assign our unauthenticated rate throttle limits to OTP verifications.
+    throttle_classes = [AuthAnonRateThrottle]
+
+    def post(self, request):
+        # 1. Retrieve the email and code from request payload.
+        email = request.data.get('email', '').strip().lower()
+        otp_code = request.data.get('otp', '').strip()
+
+        if not email or not otp_code:
+            return Response({'error': 'Email address and verification code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Check if the user exists and is active.
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'No user account found matching this email.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not user.is_active:
+            return Response({'error': 'This account is inactive. Please contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Retrieve the active OTP record for this user.
+        try:
+            otp_record = UserOTP.objects.get(user=user)
+        except UserOTP.DoesNotExist:
+            return Response({'error': 'No active verification session found. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Check if the verification code has already expired.
+        if timezone.now() > otp_record.expires_at:
+            otp_record.delete()
+            return Response({'error': 'This verification code has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Check if the typed code matches our scrambled code in the database.
+        if check_password(otp_code, otp_record.code):
+            # Atomic Invalidation: Clean up the OTP record instantly upon successful verification.
+            otp_record.delete()
+
+            # Issue standard SimpleJWT session credentials.
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+
+            response_body = {
+                "message": "Authenticated successfully.",
+                "access": access_token,
+                "refresh": refresh_token,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.full_name
+                }
+            }
+
+            response = Response(response_body, status=status.HTTP_200_OK)
+
+            # Nest the refresh token inside a secure HttpOnly cookie.
+            response.set_cookie(
+                key='refresh_token',
+                value=refresh_token,
+                httponly=True,
+                secure=True,
+                samesite='Lax'
+            )
+
+            return response
+        else:
+            # 6. Consecutive Failure Tracker: Increment attempt counts on incorrect entries.
+            otp_record.attempts += 1
+            otp_record.save()
+
+            # If the user reaches 3 failed attempts, wipe the session immediately.
+            if otp_record.attempts >= 3:
+                otp_record.delete()
+                return Response({
+                    'error': 'Incorrect code entered 3 consecutive times. Your verification session has been locked. Please request a new code.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Otherwise, return an error specifying how many attempts remain.
+            attempts_remaining = 3 - otp_record.attempts
+            return Response({
+                'error': f'Incorrect verification code. You have {attempts_remaining} attempts remaining.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
 
