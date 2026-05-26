@@ -57,6 +57,9 @@ INSTALLED_APPS = [
     
     # Register our custom authentication application to handle email logins!
     'userauths',
+
+    # Handles sending emails through external providers like Resend
+    'anymail',
 ]
 
 # The Middleware acts like a series of security bouncers standing in a hallway.
@@ -192,4 +195,22 @@ SOCIAL_AUTH = {
         'client_secret': env('GOOGLE_CLIENT_SECRET', default=''),
     }
 }
+
+# ==============================================================================
+# EMAIL SETTINGS (django-anymail + Resend)
+# ==============================================================================
+
+# Route all Django emails through Resend
+EMAIL_BACKEND = 'anymail.backends.resend.EmailBackend'
+
+# The "from" address shown to users in their inbox
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Staqed <noreply@staqed.com>')
+
+# Anymail reads your Resend API key here
+ANYMAIL = {
+    'RESEND_API_KEY': env('RESEND_API_KEY', default=''),
+}
+
+# The base URL of your frontend — used to build magic link URLs in emails
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 

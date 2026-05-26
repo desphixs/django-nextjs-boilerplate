@@ -42,6 +42,14 @@ class RegisterView(APIView):
         # 3. Save the new User model instance to the database.
         user = serializer.save()
         
+        # Send a welcoming email card to the guest since they are brand new!
+        try:
+            from .emails import send_welcome_email
+            send_welcome_email(to_email=user.email, full_name=user.full_name)
+        except Exception:
+            # We catch exceptions so that email server failure doesn't block the API registration response.
+            pass
+        
         # Create a success payload to return to the frontend client.
         success_payload = {
             "message": "User registered successfully.",
@@ -205,6 +213,15 @@ class GitHubLogin(APIView):
             defaults={'full_name': full_name}
         )
 
+        # Dispatch custom welcome email ONLY if this is a newly provisioned user.
+        if created:
+            try:
+                from .emails import send_welcome_email
+                send_welcome_email(to_email=user.email, full_name=user.full_name)
+            except Exception:
+                # Catching any email failure to prevent login crashes.
+                pass
+
         # Step 7: Issue our site's standard SimpleJWT Refresh and Access tokens to establish their session!
         refresh = RefreshToken.for_user(user)
 
@@ -288,6 +305,15 @@ class GoogleLogin(APIView):
             email=email,
             defaults={'full_name': full_name}
         )
+
+        # Dispatch custom welcome email ONLY if this is a newly provisioned user.
+        if created:
+            try:
+                from .emails import send_welcome_email
+                send_welcome_email(to_email=user.email, full_name=user.full_name)
+            except Exception:
+                # Catching any email failure to prevent login crashes.
+                pass
 
         # Step 6: Issue our site's standard SimpleJWT Refresh and Access tokens to establish their session!
         refresh = RefreshToken.for_user(user)

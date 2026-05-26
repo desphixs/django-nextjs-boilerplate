@@ -15,7 +15,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     
     # Field to confirm the password (write-only).
-    password_confirm = serializers.CharField(
+    confirm_password = serializers.CharField(
         write_only=True,
         required=True,
         style={'input_type': 'password'}
@@ -25,12 +25,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Hook this serializer to our custom User database model.
         model = User
         # Define the exact fields that the frontend is allowed to submit or read.
-        fields = ['email', 'full_name', 'password', 'password_confirm']
+        fields = ['email', 'full_name', 'password', 'confirm_password']
 
     # Custom validation function to check all submitted fields before saving.
     def validate(self, attrs):
         # 1. Check if the password and the confirmation password match exactly.
-        if attrs['password'] != attrs['password_confirm']:
+        if attrs['password'] != attrs['confirm_password']:
             # If they do not match, raise a validation error.
             raise serializers.ValidationError({"password": "Passwords do not match."})
 
@@ -62,8 +62,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     # This method is called when we run serializer.save() to write the new user to the database.
     def create(self, validated_data):
-        # Remove password_confirm since it is not a field in our actual database User model.
-        validated_data.pop('password_confirm')
+        # Remove confirm_password since it is not a field in our actual database User model.
+        validated_data.pop('confirm_password')
         
         # Pull out the email, password, and other extra fields.
         email = validated_data.pop('email')
