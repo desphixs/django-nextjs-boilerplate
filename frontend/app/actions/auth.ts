@@ -889,3 +889,89 @@ export async function changePasswordAction(payload: {
 }
 
 
+/**
+ * FORGOT PASSWORD REQUEST SERVER ACTION
+ * 
+ * Analogy:
+ * Think of this action like requesting a safe combination reset token envelope.
+ * It takes the guest's email address and posts it securely to the Django receptionist.
+ * Django validates and prints the reset key code to the console for dev debugging,
+ * and our action returns the success notification!
+ */
+export async function forgotPasswordAction(payload: { email: string }) {
+    try {
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/password/reset/initiate/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            return {
+                success: true,
+                message: data.message || "A reset link has been dispatched to your email address.",
+            };
+        } else {
+            return {
+                success: false,
+                message: data.error || data.message || "Failed to initiate password reset.",
+            };
+        }
+    } catch (error: any) {
+        return {
+            success: false,
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
+
+
+/**
+ * CONFIRM PASSWORD RESET SERVER ACTION
+ * 
+ * Analogy:
+ * Think of this like presenting the temporary pass key token back to the hotel manager to finalize combination lock updates.
+ * It carries the base64 encoded user ID envelope (uidb64), the cryptographic signature (token), and the brand new password (new_password)
+ * directly to the Django server.
+ * Django verifies mathematical validity and shelf life, updates the vault locks, and confirms success!
+ */
+export async function resetPasswordConfirmAction(payload: {
+    uidb64: string;
+    token: string;
+    new_password: string;
+}) {
+    try {
+        const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/password/reset/confirm/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            return {
+                success: true,
+                message: data.message || "Your password has been successfully reset.",
+            };
+        } else {
+            return {
+                success: false,
+                message: data.error || data.message || "Failed to confirm password reset.",
+            };
+        }
+    } catch (error: any) {
+        return {
+            success: false,
+            message: `Network error: ${error.message || 'Failed to connect to backend server.'}`,
+        };
+    }
+}
+
+

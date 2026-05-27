@@ -911,7 +911,7 @@ class PasswordResetInitiateView(APIView):
             token = default_token_generator.make_token(user)
             
             # Construct a complete link that routes the guest to our frontend password reset form
-            reset_link = f"{settings.FRONTEND_URL}/reset-password-confirm/?uid={uidb64}&token={token}"
+            reset_link = f"{settings.FRONTEND_URL}/reset-password/?uid={uidb64}&token={token}"
             
             # Direct the link to our console/terminal stream so developer can locate it without opening active mailbox!
             print(f"\n================ PASSWORD RESET DEBUGGER ================")

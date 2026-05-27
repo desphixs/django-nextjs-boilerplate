@@ -153,7 +153,7 @@ export default function RegisterPage() {
                 type="text"
                 placeholder="Marcus Aurelius"
                 aria-invalid={errors.full_name ? 'true' : 'false'}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-sm font-medium transition-all duration-200 outline-none
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm font-medium transition-all duration-200 outline-none
                   ${errors.full_name 
                     ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-950/30' 
                     : 'border-zinc-200 dark:border-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30'
@@ -185,7 +185,7 @@ export default function RegisterPage() {
                 type="email"
                 placeholder="you@example.com"
                 aria-invalid={errors.email ? 'true' : 'false'}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-sm font-medium transition-all duration-200 outline-none
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm font-medium transition-all duration-200 outline-none
                   ${errors.email 
                     ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-950/30' 
                     : 'border-zinc-200 dark:border-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30'
@@ -217,7 +217,7 @@ export default function RegisterPage() {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 aria-invalid={errors.password ? 'true' : 'false'}
-                className={`w-full pl-10 pr-10 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-sm font-medium transition-all duration-200 outline-none
+                className={`w-full pl-10 pr-10 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm font-medium transition-all duration-200 outline-none
                   ${errors.password 
                     ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-950/30' 
                     : 'border-zinc-200 dark:border-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30'
@@ -257,7 +257,7 @@ export default function RegisterPage() {
                 type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 aria-invalid={errors.confirm_password ? 'true' : 'false'}
-                className={`w-full pl-10 pr-10 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-sm font-medium transition-all duration-200 outline-none
+                className={`w-full pl-10 pr-10 py-2.5 rounded-xl border bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm font-medium transition-all duration-200 outline-none
                   ${errors.confirm_password 
                     ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-950/30' 
                     : 'border-zinc-200 dark:border-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-100 dark:focus:ring-zinc-900/30'
