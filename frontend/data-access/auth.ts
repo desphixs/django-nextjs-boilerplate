@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { env } from '@/app/env';
 
 /**
  * VERIFY SESSION STATE (Data Access Layer - DAL)
@@ -25,17 +26,37 @@ export const verifySession = cache(async () => {
   }
   
   try {
-    // 4. Return the active session status and placeholder user details.
-    // In future phases, we will verify this token signature or load active profile rows.
+    // 4. Fetch the real user details from our secure Django backend.
+    // We pass the access token inside standard SimpleJWT Bearer headers.
+    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/userauths/profile/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      // Disable aggressive caching to guarantee we retrieve the latest profile updates.
+      cache: 'no-store',
+    });
+
+    // 5. Evaluate if the token has expired or is invalid on the backend.
+    if (!response.ok) {
+      return null;
+    }
+
+    // 6. Parse the profile payload asynchronously.
+    const data = await response.json();
+
     return { 
       authenticated: true, 
       user: { 
-        email: 'developer@staqed.com', 
-        name: 'Master Developer' 
+        email: data.email, 
+        name: data.full_name || 'Anonymous User',
+        avatar: data.avatar || null
       } 
     };
   } catch (error) {
-    // If any decryption or verify error occurs, invalidate the session.
+    // If any decryption, API verify, or network error occurs, invalidate the session.
     return null;
   }
 });
+
