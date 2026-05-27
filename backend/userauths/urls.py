@@ -2,13 +2,18 @@
 from django.urls import path
 
 # Import our custom Views to hook them up to URL paths.
-from .views import RegisterView, LoginView, GitHubLogin, GoogleLogin, RequestMagicLinkView, VerifyMagicLinkView, RequestOTPView, VerifyOTPView, UserProfileView, PasswordChangeView, CloudinarySignatureView, DeleteAccountView
+from .views import (
+    RegisterView, LoginView, GitHubLogin, GoogleLogin, 
+    RequestMagicLinkView, VerifyMagicLinkView, 
+    RequestOTPView, VerifyOTPView, 
+    UserProfileView, PasswordChangeView, 
+    CloudinarySignatureView, DeleteAccountView,
+    PasswordResetInitiateView, PasswordResetConfirmView
+)
 
 # Define the local URL patterns list for the userauths application.
 urlpatterns = [
     # 1. Map the 'register/' path to our RegisterView class.
-    # as_view() is called because Django's URL router expects a standard function callback
-    # rather than a class, so as_view() acts as the bridge for class-based views.
     path('register/', RegisterView.as_view(), name='register'),
 
     # 2. Map the 'login/' path to our LoginView class.
@@ -43,7 +48,10 @@ urlpatterns = [
 
     # 12. Map the 'account/delete/' path to our DeleteAccountView class.
     path('account/delete/', DeleteAccountView.as_view(), name='delete_account'),
+
+    # 13. Map the 'password/reset/initiate/' path to our PasswordResetInitiateView class.
+    path('password/reset/initiate/', PasswordResetInitiateView.as_view(), name='password_reset_initiate'),
+
+    # 14. Map the 'password/reset/confirm/' path to our PasswordResetConfirmView class.
+    path('password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
 ]
-
-
-

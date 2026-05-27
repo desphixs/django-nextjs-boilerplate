@@ -864,6 +864,155 @@ class DeleteAccountView(APIView):
             }, status=status.HTTP_200_OK)
 
 
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from .emails import send_password_reset_email
+
+
+class PasswordResetInitiateView(APIView):
+    """
+    PASSWORD RESET INITIATION VIEW
+    
+    Analogy:
+    Think of this like a hotel guest who forgot their physical room key combination.
+    1. They walk up to the receptionist and state their email address.
+    2. The receptionist checks their member list. If the user does not exist, they politely inform them 
+       the verification envelope is dispatched anyway (to protect against suspicious hackers who want to probe 
+       our members list!).
+    3. If the member exists, the receptionist creates a secure, temporary, stamped security pass (the token)
+       that mathematically links to the user's current password state and pk, valid for exactly 1 hour.
+    4. The receptionist seals the token and base64-encoded user ID into a unique letter (the link) and sends it.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthAnonRateThrottle]
+
+    def post(self, request):
+        email = request.data.get('email')
+        
+        # 1. Boundary filter: Validate email presence
+        if not email:
+            return Response({
+                'error': 'Please provide a valid email address.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Check if a user with this email address exists in the database
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            user = None
+
+        # 3. If the user is registered, generate the secure reset link
+        if user:
+            # urlsafe_base64_encode converts the user's primary key into a safe, secure, encoded string.
+            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # make_token creates a cryptographically signed signature that expires naturally.
+            token = default_token_generator.make_token(user)
+            
+            # Construct a complete link that routes the guest to our frontend password reset form
+            reset_link = f"{settings.FRONTEND_URL}/reset-password-confirm/?uid={uidb64}&token={token}"
+            
+            # Direct the link to our console/terminal stream so developer can locate it without opening active mailbox!
+            print(f"\n================ PASSWORD RESET DEBUGGER ================")
+            print(f"User: {user.email}")
+            print(f"Generated Reset Link: {reset_link}")
+            print(f"=========================================================\n")
+            
+            # Dispatch custom templated email in a safe block to avoid breaking on connection faults
+            try:
+                send_password_reset_email(to_email=user.email, reset_link=reset_link, full_name=user.full_name)
+            except Exception as e:
+                print(f"Email dispatch error: {e}")
+
+        # 4. Respond with a positive indicator block to secure against user enumeration attacks
+        return Response({
+            'message': 'If a registered account matches this email address, a password reset link has been dispatched to your inbox.'
+        }, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    PASSWORD RESET CONFIRMATION VIEW
+    
+    Analogy:
+    Think of this like presenting the stamped security pass back to the hotel manager.
+    1. The manager decodes the guest envelope (uidb64) to find the guest's record.
+    2. They check if the cryptographic stamp (token) is authentic and within its 1-hour shelf life.
+    3. If valid, they let you update your security code (password) using modern hashing locks (set_password).
+    4. Once the lock changes, the pass automatically self-destructs to prevent repeat logins!
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthAnonRateThrottle]
+
+    def post(self, request):
+        uidb64 = request.data.get('uidb64')
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+
+        # 1. Boundary filter: Guarantee parameters are populated
+        if not uidb64 or not token or not new_password:
+            return Response({
+                'error': 'Missing parameters. Please provide your uid, token, and new password details.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Decode base64 uid to locate the target custom User model instance
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        # 3. Halt operation if the user details are unrecognized
+        if not user:
+            return Response({
+                'error': 'Invalid or expired password reset link.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Verify token mathematical validity against the specific user state
+        if not default_token_generator.check_token(user, token):
+            return Response({
+                'error': 'Invalid or expired password reset link.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Boundary filter: Enforce robust password complexity rules
+        if len(new_password) < 8:
+            return Response({
+                'error': 'Password must be at least 8 characters long.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if not any(char.isupper() for char in new_password):
+            return Response({
+                'error': 'Password must contain at least one uppercase letter.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if not any(char.islower() for char in new_password):
+            return Response({
+                'error': 'Password must contain at least one lowercase letter.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if not any(char.isdigit() for char in new_password):
+            return Response({
+                'error': 'Password must contain at least one number.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        special_characters = "@#$!%*?&"
+        if not any(char in special_characters for char in new_password):
+            return Response({
+                'error': f'Password must contain at least one special character from: {special_characters}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 6. Apply new hashed password locks to user database row
+        user.set_password(new_password)
+        # Force user account to be active again in case it was disabled
+        user.is_active = True
+        user.save()
+
+        # NOTE: Django's default_token_generator uses the user's password hash to sign the tokens.
+        # Once set_password is saved, the hash changes, which automatically invalidates all old tokens!
+
+        return Response({
+            'message': 'Your account password has been successfully updated.'
+        }, status=status.HTTP_200_OK)
+
+
 
 
 

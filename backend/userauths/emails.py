@@ -84,3 +84,27 @@ def send_otp_email(to_email: str, otp_code: str, full_name: str = '') -> None:
         html_message=html_message,
         fail_silently=False,
     )
+
+
+def send_password_reset_email(to_email: str, reset_link: str, full_name: str = '') -> None:
+    """
+    Sends a beautiful custom password reset email containing a secure, time-restricted token link.
+    """
+    subject = 'Reset Your Password - Staqed'
+    
+    context = {
+        'name': full_name or 'there',
+        'reset_link': reset_link
+    }
+    
+    html_message = render_to_string('emails/password_reset.html', context)
+    plain_message = strip_tags(html_message)
+
+    send_mail(
+        subject=subject,
+        message=plain_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[to_email],
+        html_message=html_message,
+        fail_silently=False,
+    )
