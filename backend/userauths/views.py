@@ -382,7 +382,7 @@ class RequestMagicLinkView(APIView):
 
         # 4. Construct the full single-use authentication URL targeting our frontend.
         frontend_url = settings.FRONTEND_URL
-        magic_link = f"{frontend_url}/auth/magic-link?token={token}"
+        magic_link = f"{frontend_url}/magic-link?token={token}"
 
         # 5. Dispatch the email with the secure hyperlink.
         try:
