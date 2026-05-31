@@ -6,7 +6,7 @@ import { User, Mail, ShieldAlert, Calendar, Code, Globe, CheckCircle2, ShieldChe
 // Import Sonner toast notification manager for client feedback
 import { toast } from "sonner";
 // Import our secure profile retrieval server action
-import { getUserProfileAction } from "@/app/actions/auth";
+import { getUserProfileAction } from "@/app/actions/userauths/profile";
 
 /**
  * Type interface for user profile data structure returned by serializer

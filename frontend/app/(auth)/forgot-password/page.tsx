@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 // Import our secure forgot password server action
-import { forgotPasswordAction } from "@/app/actions/auth";
+import { forgotPasswordAction } from "@/app/actions/userauths/password";
 // Import modern icons from lucide-react
 import { Mail, Loader2, ArrowRight, Shield, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";

@@ -14,7 +14,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
 
 // Import secure logout action helper.
-import { logoutAction } from "@/app/actions/auth";
+import { logoutAction } from "@/app/actions/userauths/auth";
 
 // Define a clear interface for navigation links to make the code highly extensible!
 interface NavigationItem {

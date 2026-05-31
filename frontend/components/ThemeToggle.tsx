@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useTransition } from "react";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
-import { saveThemeAction } from "@/app/actions/auth";
+import { saveThemeAction } from "@/app/actions/userauths/theme";
 import { toast } from "sonner";
 
 /**

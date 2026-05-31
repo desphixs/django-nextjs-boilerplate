@@ -9,7 +9,7 @@ import { z } from 'zod';
 import Link from 'next/link';
 
 // Import our secure Next.js Server Actions for handling auth flows.
-import { loginAction, requestMagicLinkAction, requestOtpAction, verifyOtpAction } from '@/app/actions/auth';
+import { loginAction, requestMagicLinkAction, requestOtpAction, verifyOtpAction } from '@/app/actions/userauths/auth';
 // Import our type-safe, validated environment settings to safely read client IDs.
 import { env } from '@/app/env';
 

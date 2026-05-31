@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 // Import routing hooks from Next.js to parse URLs and redirect pages.
 import { useRouter, useSearchParams } from 'next/navigation';
 // Import our secure Server Action to verify tokens on the server.
-import { verifyMagicLinkAction } from '@/app/actions/auth';
+import { verifyMagicLinkAction } from '@/app/actions/userauths/auth';
 // Import beautiful UI icons from Lucide.
 import { Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';

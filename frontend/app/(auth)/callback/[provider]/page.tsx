@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 
 // Importing our server action that exchanges the temporary code for JWT credentials.
-import { socialLoginAction } from '@/app/actions/auth';
+import { socialLoginAction } from '@/app/actions/userauths/auth';
 
 // Importing standard icons from lucide-react to represent our loading status beautifully.
 import { Loader2 } from 'lucide-react';

@@ -11,7 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 // Import our secure profile server actions to fetch and update details
-import { getUserProfileAction, updateUserProfileAction, getCloudinarySignatureAction, deleteAccountAction, changePasswordAction } from '@/app/actions/auth';
+import { getUserProfileAction, updateUserProfileAction, getCloudinarySignatureAction, deleteAccountAction } from '@/app/actions/userauths/profile';
+import { changePasswordAction } from '@/app/actions/userauths/password';
 
 
 

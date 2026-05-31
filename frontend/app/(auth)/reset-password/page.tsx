@@ -9,7 +9,7 @@ import { z } from "zod";
 import Link from "next/link";
 
 // Import our secure password reset confirmation server action.
-import { resetPasswordConfirmAction } from "@/app/actions/auth";
+import { resetPasswordConfirmAction } from "@/app/actions/userauths/password";
 
 // Import modern clean icons from lucide-react.
 import { Lock, Eye, EyeOff, Loader2, ArrowRight, ShieldAlert, CheckCircle2, ArrowLeft, Check } from "lucide-react";
